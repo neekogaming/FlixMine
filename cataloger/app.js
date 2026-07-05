@@ -29,6 +29,7 @@ const state = {
     candidates: [],          // [{result, score, confidence}]
     selected: null,          // {result, details, imdbId}
     catalog: null,           // {movies, document, sha} — cached
+    supersededShas: [],      // shas our own PUTs replaced; a GET returning one is provably stale
     approvedChannels: [],
     batch: [],               // [{link, videoId, ytTitle, channel, status, catalogId, best, candidates}]
     batchActiveIndex: -1,    // item currently loaded in Add view
@@ -302,6 +303,13 @@ async function loadCatalog(force = false) {
     // no-store: GitHub's API is browser-cached for 60s, which made conflict
     // retries re-fetch the same stale sha and fail repeatedly
     const data = await fetchJson(`${githubContentUrl()}?ref=${encodeURIComponent(branch)}`, { headers: githubHeaders(), cache: 'no-store' });
+    // GitHub can serve reads that predate our own last commit for up to ~60s.
+    // If the sha is one our own PUT already replaced, this read is provably
+    // stale — keep the tracked catalog instead of clobbering its fresh sha.
+    if (state.catalog && state.supersededShas.includes(data.sha)) {
+        log('GitHub returned a stale catalog read — keeping the tracked version.');
+        return state.catalog;
+    }
     const raw = b64ToUtf8(data.content || '');
     const parsed = parseCatalog(raw);
     parsed.sha = data.sha;
@@ -635,9 +643,14 @@ async function appendToCatalog() {
         // GitHub's API can serve stale reads for a few seconds after a commit).
         // Retries force a fresh download after a short wait.
         let lastError = null;
-        for (let attempt = 1; attempt <= 3; attempt++) {
-            if (attempt > 1) await new Promise(r => setTimeout(r, 1500 * (attempt - 1)));
+        for (let attempt = 1; attempt <= 4; attempt++) {
+            if (attempt > 1) await new Promise(r => setTimeout(r, 2500 * (attempt - 1)));
             const cat = await loadCatalog(attempt > 1);
+            if (attempt > 1 && state.supersededShas.includes(cat.sha)) {
+                log(`GitHub is still serving a stale catalog — waiting it out (${attempt}/4)…`);
+                lastError = Object.assign(new Error('stale read'), { status: 409 });
+                continue;
+            }
             const entry = buildEntry(nextMovieId(cat.movies));
             const dupes = findDuplicates(cat.movies, entry);
             if (dupes.length) throw new Error('Duplicate: ' + dupes.join('; '));
@@ -663,6 +676,8 @@ async function appendToCatalog() {
                 // Keep the in-memory catalog current: GitHub's PUT response carries
                 // the new sha, so the next add doesn't depend on a (possibly stale) re-download.
                 if (result?.content?.sha) {
+                    state.supersededShas.push(cat.sha);
+                    if (state.supersededShas.length > 20) state.supersededShas.shift();
                     state.catalog = { movies: [...cat.movies, entry], document: cat.document, sha: result.content.sha };
                     $('chipCatalogText').textContent = `Catalog · ${state.catalog.movies.length}`;
                 } else {
@@ -673,11 +688,17 @@ async function appendToCatalog() {
             } catch (e) {
                 lastError = e;
                 if (e.status === 409 || (e.status === 422 && /sha|does not match/i.test(e.message))) {
-                    log(`Write conflict (someone else just committed) — retrying (${attempt}/3)…`);
+                    // our sha was rejected, so any future read returning it is stale
+                    if (cat.sha && !state.supersededShas.includes(cat.sha)) state.supersededShas.push(cat.sha);
+                    state.catalog = null; // don't trust the tracked copy either
+                    log(`Write conflict — retrying with a fresh download (${attempt}/4)…`);
                     continue;
                 }
                 throw e;
             }
+        }
+        if (lastError && (lastError.status === 409 || lastError.status === 422)) {
+            throw new Error('GitHub kept serving an outdated version of the catalog. Nothing was added twice — wait ~30 seconds and press "Add to Catalog" again.');
         }
         throw lastError || new Error('Write failed after retries.');
     } catch (e) {
@@ -732,9 +753,11 @@ function downloadFile(name, content) {
 
 /* ============================== recent strip ============================== */
 
-async function refreshRecent() {
+/* Renders from the tracked in-memory catalog by default. Forcing a download
+ * right after an add is what used to clobber the fresh sha with a stale read. */
+async function refreshRecent(force = false) {
     try {
-        const cat = await loadCatalog(true);
+        const cat = await loadCatalog(force);
         const recent = cat.movies.slice(-10).reverse();
         $('recentCard').hidden = recent.length === 0;
         $('recentList').innerHTML = recent.map(m => `
@@ -1183,7 +1206,7 @@ function wire() {
         navigator.clipboard.writeText($('jsonPreview').textContent).then(
             () => log('JSON copied.'), () => log('Clipboard copy failed.', true));
     });
-    $('btnRefreshRecent').addEventListener('click', refreshRecent);
+    $('btnRefreshRecent').addEventListener('click', () => refreshRecent(true));
 
     // batch
     $('btnBuildQueue').addEventListener('click', buildQueue);
@@ -1226,7 +1249,7 @@ function boot() {
         switchView('viewSettings');
         log('Welcome! Add your TMDb key (and GitHub token) in Settings to get started.');
     }
-    log('FlixMine Cataloger ready (build v7).');
+    log('FlixMine Cataloger ready (build v8).');
     bootData();
     // Resume matching for a restored queue (a reload interrupts the run)
     if (state.batch.some(i => i.status === 'queued') && state.settings.tmdb.trim()) {
