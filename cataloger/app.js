@@ -703,12 +703,12 @@ function afterAdded(entry) {
         state.batchActiveIndex = -1;
         saveBatch();
         renderBatch();
-        const next = state.batch.findIndex(i => i.status === 'ready');
+        const next = nextReviewable();
         if (next >= 0) {
             log('Loading next batch item…');
             setTimeout(() => reviewBatchItem(next), 600);
         } else {
-            log('Batch: no more ready items.');
+            log('Batch: no more items to review.');
             setTimeout(() => { switchView('viewBatch'); resetWorkflow(); }, 900);
         }
     } else {
@@ -904,7 +904,7 @@ function renderBatch() {
         if (c[k]) parts.push(`${c[k]} ${label}`);
     }
     $('batchCounts').textContent = state.batch.length ? `${state.batch.length} links · ${parts.join(' · ')}` : 'empty';
-    $('btnReviewNext').disabled = !state.batch.some(i => i.status === 'ready');
+    $('btnReviewNext').disabled = !state.batch.some(i => ['ready', 'queued', 'nomatch', 'error'].includes(i.status));
     $('btnExportSkipped').disabled = !state.batch.some(i => ['skipped', 'nomatch', 'error'].includes(i.status));
     const badge = $('batchBadge');
     const readyCount = c.ready || 0;
@@ -959,8 +959,16 @@ function skipBatchItem(index) {
     log(`Skipped ${item.videoId}.`);
 }
 
+// Ready items first; then anything still needing a human (queued/nomatch/error),
+// so the add flow keeps moving instead of bouncing back to the queue.
+function nextReviewable() {
+    const ready = state.batch.findIndex(i => i.status === 'ready');
+    if (ready >= 0) return ready;
+    return state.batch.findIndex(i => ['queued', 'nomatch', 'error'].includes(i.status));
+}
+
 function reviewNext() {
-    const next = state.batch.findIndex(i => i.status === 'ready');
+    const next = nextReviewable();
     if (next >= 0) reviewBatchItem(next);
 }
 
@@ -1216,8 +1224,13 @@ function boot() {
         switchView('viewSettings');
         log('Welcome! Add your TMDb key (and GitHub token) in Settings to get started.');
     }
-    log('FlixMine Cataloger ready (build v3).');
+    log('FlixMine Cataloger ready (build v4).');
     bootData();
+    // Resume matching for a restored queue (a reload interrupts the run)
+    if (state.batch.some(i => i.status === 'queued') && state.settings.tmdb.trim()) {
+        log('Resuming batch matching for queued items…');
+        runBatchMatching();
+    }
 }
 
 boot();
