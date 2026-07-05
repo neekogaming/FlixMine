@@ -794,12 +794,14 @@ async function buildQueue() {
     // pre-check against catalog
     try {
         const cat = await loadCatalog();
-        const byVideo = new Map(cat.movies.map(m => [m.video_id, m.id]));
-        for (const item of state.batch) {
-            if (byVideo.has(item.videoId)) {
-                item.status = 'already';
-                item.catalogId = byVideo.get(item.videoId);
-            }
+        const have = new Set(cat.movies.map(m => m.video_id));
+        const before = state.batch.length;
+        state.batch = state.batch.filter(i => !have.has(i.videoId));
+        const dropped = before - state.batch.length;
+        if (dropped) {
+            // also scrub them from the links box so the list stays clean
+            $('batchLinks').value = state.batch.map(i => i.link).join('\n');
+            log(`Removed ${dropped} link(s) already in the catalog.`);
         }
     } catch (e) {
         log('Batch duplicate pre-check skipped: ' + e.message, true);
@@ -807,7 +809,7 @@ async function buildQueue() {
 
     renderBatch();
     saveBatch();
-    log(`Built batch queue with ${items.length} link(s). Auto-matching…`);
+    log(`Built batch queue with ${state.batch.length} link(s). Auto-matching…`);
     runBatchMatching();
 }
 
@@ -1373,7 +1375,7 @@ function boot() {
         } catch (e) { msg.textContent = e.message; msg.className = 'test-msg err'; }
     });
 
-    log('FlixMine Cataloger ready (build v5).');
+    log('FlixMine Cataloger ready (build v6).');
     bootData();
     // Resume matching for a restored queue (a reload interrupts the run)
     if (state.batch.some(i => i.status === 'queued') && state.settings.tmdb.trim()) {
