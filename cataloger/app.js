@@ -20,6 +20,7 @@ const state = {
         remember: false,
         tmdb: '',
         omdb: '',
+        yt: '',
         target: 'github'
     },
     // current single-movie workflow
@@ -33,6 +34,7 @@ const state = {
     batch: [],               // [{link, videoId, ytTitle, channel, status, catalogId, best, candidates}]
     batchActiveIndex: -1,    // item currently loaded in Add view
     batchRunning: false,
+    channelImportBusy: false,
     appendBusy: false,
     lookupSeq: 0             // guards stale async lookups
 };
@@ -972,6 +974,138 @@ function reviewNext() {
     if (next >= 0) reviewBatchItem(next);
 }
 
+/* ============================== channel import ============================== */
+
+const YT_API = 'https://www.googleapis.com/youtube/v3/';
+
+function ytKey() {
+    const key = state.settings.yt.trim();
+    if (!key) throw new Error('Add your YouTube Data API key in Settings first.');
+    return key;
+}
+
+// Accepts: youtube.com/channel/UC…, youtube.com/@handle, youtube.com/user/name,
+// a bare @handle, or a bare UC… id — with or without trailing /videos etc.
+function parseChannelInput(text) {
+    const t = text.trim();
+    if (!t) return null;
+    let m = /youtube\.com\/channel\/(UC[A-Za-z0-9_-]{22})/i.exec(t);
+    if (m) return { id: m[1] };
+    if (/^UC[A-Za-z0-9_-]{22}$/.test(t)) return { id: t };
+    m = /youtube\.com\/user\/([A-Za-z0-9_.-]+)/i.exec(t);
+    if (m) return { user: m[1] };
+    m = /youtube\.com\/@([A-Za-z0-9_.-]+)/i.exec(t);
+    if (m) return { handle: m[1] };
+    m = /^@?([A-Za-z0-9_.-]+)$/.exec(t);
+    if (m && !t.includes('/')) return { handle: m[1] };
+    return null;
+}
+
+async function resolveChannel(ref) {
+    const params = new URLSearchParams({ part: 'snippet,contentDetails,statistics', key: ytKey() });
+    if (ref.id) params.set('id', ref.id);
+    else if (ref.user) params.set('forUsername', ref.user);
+    else params.set('forHandle', ref.handle);
+    const data = await fetchJson(`${YT_API}channels?${params}`);
+    const ch = data?.items?.[0];
+    if (!ch) throw new Error('Channel not found.');
+    return {
+        id: ch.id,
+        title: ch.snippet?.title || ch.id,
+        uploads: ch.contentDetails?.relatedPlaylists?.uploads || ('UU' + ch.id.slice(2)),
+        videoCount: Number(ch.statistics?.videoCount || 0)
+    };
+}
+
+function isoDurationToMinutes(iso) {
+    const m = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(iso || '');
+    if (!m) return 0;
+    return Number(m[1] || 0) * 1440 + Number(m[2] || 0) * 60 + Number(m[3] || 0) + Number(m[4] || 0) / 60;
+}
+
+async function importChannelVideos() {
+    if (state.channelImportBusy) return;
+    const ref = parseChannelInput($('chUrl').value);
+    if (!ref) { log('Paste a channel link, @handle, or UC… ID first.', true); return; }
+    state.channelImportBusy = true;
+    $('btnFetchChannel').disabled = true;
+    const setStatus = msg => { $('chImportStatus').textContent = msg; };
+    try {
+        setStatus('Resolving channel…');
+        const ch = await resolveChannel(ref);
+        log(`Channel: ${ch.title} — ~${ch.videoCount} uploads. Fetching…`);
+
+        // All uploads, 50 per page
+        const ids = [];
+        let pageToken = '';
+        do {
+            const params = new URLSearchParams({ part: 'contentDetails', playlistId: ch.uploads, maxResults: '50', key: ytKey() });
+            if (pageToken) params.set('pageToken', pageToken);
+            const page = await fetchJson(`${YT_API}playlistItems?${params}`);
+            for (const it of page.items || []) {
+                const vid = it.contentDetails?.videoId;
+                if (vid) ids.push(vid);
+            }
+            pageToken = page.nextPageToken || '';
+            setStatus(`Fetched ${ids.length}${ch.videoCount ? '/' + ch.videoCount : ''}…`);
+        } while (pageToken);
+
+        // Movies only: keep >= 40 min
+        let kept = ids, tooShort = 0;
+        if ($('chMoviesOnly').checked) {
+            kept = [];
+            for (let i = 0; i < ids.length; i += 50) {
+                const chunk = ids.slice(i, i + 50);
+                const params = new URLSearchParams({ part: 'contentDetails', id: chunk.join(','), key: ytKey() });
+                const data = await fetchJson(`${YT_API}videos?${params}`);
+                for (const v of data.items || []) {
+                    if (isoDurationToMinutes(v.contentDetails?.duration) >= 40) kept.push(v.id);
+                    else tooShort++;
+                }
+                setStatus(`Checking durations ${Math.min(i + 50, ids.length)}/${ids.length}…`);
+            }
+        }
+
+        // Drop videos already in the catalog
+        let already = 0;
+        try {
+            const cat = await loadCatalog();
+            const have = new Set(cat.movies.map(m => m.video_id));
+            const before = kept.length;
+            kept = kept.filter(id => !have.has(id));
+            already = before - kept.length;
+        } catch (e) {
+            log('Catalog check skipped: ' + e.message, true);
+        }
+
+        // Dedupe against whatever is already in the links box, then append
+        const existing = new Set();
+        for (const tok of $('batchLinks').value.split(/\s+/)) {
+            const id = extractYouTubeId(tok.trim());
+            if (id.length === 11) existing.add(id);
+        }
+        const fresh = kept.filter(id => !existing.has(id));
+        if (fresh.length) {
+            const lines = fresh.map(id => `https://www.youtube.com/watch?v=${id}`);
+            $('batchLinks').value = ($('batchLinks').value.trim() ? $('batchLinks').value.trim() + '\n' : '') + lines.join('\n');
+            saveBatch();
+        }
+
+        const bits = [`${ids.length} uploads`];
+        if (tooShort) bits.push(`${tooShort} under 40 min`);
+        if (already) bits.push(`${already} already in catalog`);
+        bits.push(`${fresh.length} new link(s) added`);
+        setStatus(bits.join(' · '));
+        log(`Channel import (${ch.title}): ${bits.join(' · ')}.`);
+    } catch (e) {
+        setStatus('');
+        log('Channel import failed: ' + e.message, true);
+    } finally {
+        state.channelImportBusy = false;
+        $('btnFetchChannel').disabled = false;
+    }
+}
+
 function exportSkipped() {
     const links = state.batch
         .filter(i => ['skipped', 'nomatch', 'error'].includes(i.status))
@@ -995,6 +1129,7 @@ function loadSettings() {
     $('setRemember').checked = state.settings.remember;
     $('setTmdb').value = state.settings.tmdb;
     $('setOmdb').value = state.settings.omdb;
+    $('setYt').value = state.settings.yt;
     $('targetGithub').checked = state.settings.target !== 'download';
     $('targetDownload').checked = state.settings.target === 'download';
 }
@@ -1007,6 +1142,7 @@ function readSettingsForm() {
     state.settings.remember = $('setRemember').checked;
     state.settings.tmdb = $('setTmdb').value.trim();
     state.settings.omdb = $('setOmdb').value.trim();
+    state.settings.yt = $('setYt').value.trim();
     state.settings.target = $('targetDownload').checked ? 'download' : 'github';
 }
 
@@ -1224,7 +1360,20 @@ function boot() {
         switchView('viewSettings');
         log('Welcome! Add your TMDb key (and GitHub token) in Settings to get started.');
     }
-    log('FlixMine Cataloger ready (build v4).');
+    // channel import
+    $('btnFetchChannel').addEventListener('click', importChannelVideos);
+    $('chUrl').addEventListener('keydown', e => { if (e.key === 'Enter') importChannelVideos(); });
+    $('btnTestYt').addEventListener('click', async () => {
+        readSettingsForm();
+        const msg = $('ytTestMsg');
+        try {
+            const data = await fetchJson(`${YT_API}channels?part=id&forHandle=youtube&key=${encodeURIComponent(ytKey())}`);
+            if (!data?.items?.length) throw new Error('Unexpected response — check the key.');
+            msg.textContent = 'Works ✓'; msg.className = 'test-msg ok';
+        } catch (e) { msg.textContent = e.message; msg.className = 'test-msg err'; }
+    });
+
+    log('FlixMine Cataloger ready (build v5).');
     bootData();
     // Resume matching for a restored queue (a reload interrupts the run)
     if (state.batch.some(i => i.status === 'queued') && state.settings.tmdb.trim()) {

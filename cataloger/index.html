@@ -134,6 +134,17 @@
 <!-- ============ BATCH ============ -->
 <section class="view" id="viewBatch">
     <div class="card">
+        <div class="card-title">Import from channel <span class="match-status" id="chImportStatus"></span></div>
+        <div class="link-row">
+            <input type="text" id="chUrl" placeholder="Channel link, @handle, or UC… ID — e.g. youtube.com/@FilmFistMovies" autocomplete="off" spellcheck="false">
+            <button class="btn primary" id="btnFetchChannel">Fetch videos</button>
+        </div>
+        <div class="form-row check-row">
+            <label><input type="checkbox" id="chMoviesOnly" checked> Movies only (skip videos under 40 min)</label>
+            <span class="hint">Videos already in the catalog are dropped automatically. Needs a YouTube API key in Settings.</span>
+        </div>
+    </div>
+    <div class="card">
         <div class="card-title">Batch links</div>
         <textarea id="batchLinks" placeholder="Paste many YouTube links — one per line (or separated by spaces)"></textarea>
         <div class="batch-controls">
@@ -220,6 +231,23 @@
         </div>
     </div>
 
+    <div class="card">
+        <div class="card-title">YouTube Data API <span class="opt">optional</span> <span class="test-msg" id="ytTestMsg"></span></div>
+        <p class="hint">Needed only for "Import from channel" in the Batch tab. Free, generous quota.</p>
+        <details class="howto"><summary>How to get a free YouTube API key</summary>
+            <ol>
+                <li>Go to <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">console.cloud.google.com</a> and create a project (any name, free)</li>
+                <li>APIs &amp; Services → Library → search <b>YouTube Data API v3</b> → Enable</li>
+                <li>APIs &amp; Services → Credentials → Create credentials → <b>API key</b> → copy it</li>
+            </ol>
+        </details>
+        <div class="form-row">
+            <label>API key</label>
+            <input type="password" id="setYt" autocomplete="off">
+            <button class="btn small" id="btnTestYt">Test</button>
+        </div>
+    </div>
+
     <div class="card save-card">
         <button class="btn primary" id="btnSaveSettings">Save settings</button>
         <span class="test-msg" id="saveMsg"></span>
@@ -238,6 +266,6 @@
 </footer>
 
 <!-- bump ?v= on every app.js change so browsers can't serve a stale copy -->
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>
