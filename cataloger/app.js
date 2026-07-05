@@ -399,6 +399,8 @@ function resetWorkflow(clearLink = true) {
     $('appendStatus').className = 'append-status';
     $('manTmdbId').value = '';
     $('manImdb').value = '';
+    $('btnAppend').hidden = false;
+    $('btnSkipDup').hidden = true;
 }
 
 function setYtStatus(text, cls = '') {
@@ -608,10 +610,34 @@ async function updatePreviewAndDupes() {
         badge.classList.add('dup');
         badge.textContent = 'Duplicate: ' + dupes.join('; ');
         $('btnAppend').disabled = true;
+        $('btnAppend').hidden = true;
+        $('btnSkipDup').hidden = false;
     } else {
         badge.classList.add('ok');
         badge.textContent = 'No duplicates';
         $('btnAppend').disabled = false;
+        $('btnAppend').hidden = false;
+        $('btnSkipDup').hidden = true;
+    }
+}
+
+/* Skip past a duplicate: advance the batch, or just clear for the next link. */
+function skipCurrentDuplicate() {
+    if (state.batchActiveIndex >= 0) {
+        skipBatchItem(state.batchActiveIndex);
+        const next = nextReviewable();
+        if (next >= 0) {
+            log('Skipped duplicate — loading next batch item…');
+            reviewBatchItem(next);
+        } else {
+            log('Skipped duplicate. Batch: no more items to review.');
+            switchView('viewBatch');
+            resetWorkflow();
+        }
+    } else {
+        resetWorkflow();
+        log('Skipped duplicate — paste the next link when ready.');
+        $('ytUrl').focus();
     }
 }
 
@@ -1202,6 +1228,7 @@ function wire() {
         $('channelWarn').hidden = !$('channelCustom').value;
     });
     $('btnAppend').addEventListener('click', appendToCatalog);
+    $('btnSkipDup').addEventListener('click', skipCurrentDuplicate);
     $('btnCopyJson').addEventListener('click', () => {
         navigator.clipboard.writeText($('jsonPreview').textContent).then(
             () => log('JSON copied.'), () => log('Clipboard copy failed.', true));
@@ -1249,7 +1276,7 @@ function boot() {
         switchView('viewSettings');
         log('Welcome! Add your TMDb key (and GitHub token) in Settings to get started.');
     }
-    log('FlixMine Cataloger ready (build v8).');
+    log('FlixMine Cataloger ready (build v9).');
     bootData();
     // Resume matching for a restored queue (a reload interrupts the run)
     if (state.batch.some(i => i.status === 'queued') && state.settings.tmdb.trim()) {
