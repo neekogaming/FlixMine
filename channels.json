@@ -1,0 +1,37 @@
+[
+  {
+    "id": "filmrise",
+    "name": "FilmRise",
+    "youtube_channel_id": "UCz4rMhQmMEP4Mo2YMWlBdAQ",
+    "logo_url": "https://yt3.googleusercontent.com/YAjylvuPTsEscTN1pbejOkR9Hu34AzwOg0qjl7vnH6hpzrbgL_2G7xtVsc9zGKe6HTFVxjTAZg8=s160-c-k-c0x00ffffff-no-rj",
+    "status": "approved"
+  },
+  {
+    "id": "movie_central",
+    "name": "Movie Central",
+    "youtube_channel_id": "",
+    "logo_url": "https://yt3.googleusercontent.com/aY0OFBzIWCG91l06vaEPmG16gsk2gUXn86eEfhvZbwpMRYU-rzIWrtGA1544vr7vbW-1YMLszw=s160-c-k-c0x00ffffff-no-rj",
+    "status": "approved"
+  },
+  {
+    "id": "popcornflix",
+    "name": "Popcornflix",
+    "youtube_channel_id": "UCf8gFGcQ90XDLfE_NIELLI0g",
+    "logo_url": "https://yt3.googleusercontent.com/Xk9B-4nr1BTWFOzyncYUGwJLkfuVFqJMWzB1g7qh9dbcOZkBo7YFOLaulI5VvORtsnCBs7OC7A=s160-c-k-c0x00ffffff-no-rj",
+    "status": "approved"
+  },
+  {
+    "id": "maverick_movies",
+    "name": "Maverick Movies",
+    "youtube_channel_id": "",
+    "logo_url": "https://yt3.googleusercontent.com/ytc/AIdro_lMWzbuhIwLbyNnVsB9d6fAUhPorKXJwJZQXPCD8P_ZwxI=s160-c-k-c0x00ffffff-no-rj",
+    "status": "approved"
+  },
+  {
+    "id": "cult_cinema_classics",
+    "name": "Cult Cinema Classics",
+    "youtube_channel_id": "",
+    "logo_url": "https://yt3.googleusercontent.com/MiPHwMenbgIuE2ZxWOaordQENHHSJpkLx7nz4NHJFFJT9A9uLuanBZeztgN6zjGplgUY4j571A=s160-c-k-c0x00ffffff-no-rj",
+    "status": "approved"
+  }
+]

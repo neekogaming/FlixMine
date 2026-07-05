@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlixMine — Free Movies on YouTube</title>
+  <meta name="description" content="FlixMine curates legally free movies from trusted YouTube channels. No accounts, no ads, no tracking — just free movies.">
+  <link rel="icon" type="image/png" href="assets/flixmine-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ============ NAV ============ -->
+  <header class="nav">
+    <a class="logo" href="#home" aria-label="FlixMine home">
+      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M9 6.5v11l9-5.5-9-5.5z" fill="#fff"/></svg></span>
+      <span class="wordmark">FLIX<em>MINE</em></span>
+    </a>
+    <nav class="tabs" id="tabs" aria-label="Categories"></nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="btn-search" aria-label="Search" title="Search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-about" aria-label="About" title="About">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle cx="12" cy="7.5" r="0.5" fill="currentColor"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ============ LOADING / ERROR ============ -->
+  <div class="splash" id="splash">
+    <div class="splash-logo">
+      <span class="logo-mark logo-mark-lg"><svg viewBox="0 0 24 24" fill="none"><path d="M9 6.5v11l9-5.5-9-5.5z" fill="#fff"/></svg></span>
+      <span class="wordmark wordmark-lg">FLIX<em>MINE</em></span>
+    </div>
+    <div class="splash-status" id="splash-status">Loading catalog…</div>
+  </div>
+
+  <!-- ============ BROWSE ============ -->
+  <main class="browse" id="browse" hidden>
+    <section class="hero" id="hero">
+      <div class="hero-backdrop" id="hero-backdrop"></div>
+      <div class="hero-tint"></div>
+      <div class="hero-fade-left"></div>
+      <div class="hero-fade-bottom"></div>
+      <div class="hero-content" id="hero-content"></div>
+    </section>
+    <section class="rows" id="rows"></section>
+  </main>
+
+  <!-- ============ DETAIL ============ -->
+  <div class="detail" id="detail" hidden>
+    <div class="detail-backdrop" id="detail-backdrop"></div>
+    <div class="hero-tint"></div>
+    <div class="detail-fade"></div>
+    <button class="back-btn" id="btn-back" aria-label="Back">← Back</button>
+    <div class="detail-body" id="detail-body"></div>
+  </div>
+
+  <!-- ============ SEARCH ============ -->
+  <div class="search" id="search" hidden>
+    <div class="search-bar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="text" id="search-input" placeholder="Search movies…" autocomplete="off">
+      <button class="back-btn" id="btn-search-close">Close</button>
+    </div>
+    <div class="search-results" id="search-results"></div>
+  </div>
+
+  <!-- ============ ABOUT ============ -->
+  <div class="about" id="about" hidden>
+    <button class="back-btn about-back" id="btn-about-close">← Back</button>
+    <div class="about-content">
+      <div class="about-label">ABOUT</div>
+      <h1>FlixMine</h1>
+      <div class="about-version">Version 1.0</div>
+      <p>There are more than enough great movies out there to enjoy — you shouldn't need a dozen subscriptions to watch them. FlixMine brings together free, legal movies from YouTube and gives you a premium discovery experience, so finding your next favorite film feels just as good as watching it.</p>
+      <div class="about-made-by">
+        <span>Made by</span>
+        <a href="https://neeko-portfolio.pages.dev/" target="_blank" rel="noopener">
+          <img src="assets/neeko_logo.png" alt="neeko">
+        </a>
+      </div>
+    </div>
+    <div class="tmdb-attribution">Movie data provided by <span class="tmdb-logo">TMDB</span></div>
+  </div>
+
+  <!-- ============ PLAYER MODAL ============ -->
+  <div class="player" id="player" hidden>
+    <button class="back-btn player-close" id="btn-player-close">✕ Close</button>
+    <div class="player-frame" id="player-frame"></div>
+  </div>
+
+  <footer class="site-footer" id="site-footer" hidden>
+    <span>FlixMine does not host or stream any video content. All playback happens on YouTube via official channels.</span>
+    <span class="tmdb-line">Movie data provided by <span class="tmdb-logo">TMDB</span></span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
