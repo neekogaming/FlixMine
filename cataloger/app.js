@@ -631,9 +631,13 @@ async function appendToCatalog() {
         }
 
         // Direct GitHub write with SHA-conflict retry.
+        // Attempt 1 trusts our in-memory catalog (kept current after every save —
+        // GitHub's API can serve stale reads for a few seconds after a commit).
+        // Retries force a fresh download after a short wait.
         let lastError = null;
         for (let attempt = 1; attempt <= 3; attempt++) {
-            const cat = await loadCatalog(true); // fresh content + sha every attempt
+            if (attempt > 1) await new Promise(r => setTimeout(r, 1500 * (attempt - 1)));
+            const cat = await loadCatalog(attempt > 1);
             const entry = buildEntry(nextMovieId(cat.movies));
             const dupes = findDuplicates(cat.movies, entry);
             if (dupes.length) throw new Error('Duplicate: ' + dupes.join('; '));
@@ -656,7 +660,14 @@ async function appendToCatalog() {
                     `Added ${entry.id} ✓ ` + (commitUrl ? `<a href="${esc(commitUrl)}" target="_blank" rel="noopener">view commit</a>` : ''),
                     'ok', true);
                 log(`Added ${entry.id} to GitHub.`);
-                state.catalog = null; // force fresh load next time
+                // Keep the in-memory catalog current: GitHub's PUT response carries
+                // the new sha, so the next add doesn't depend on a (possibly stale) re-download.
+                if (result?.content?.sha) {
+                    state.catalog = { movies: [...cat.movies, entry], document: cat.document, sha: result.content.sha };
+                    $('chipCatalogText').textContent = `Catalog · ${state.catalog.movies.length}`;
+                } else {
+                    state.catalog = null; // fall back to fresh load next time
+                }
                 afterAdded(entry);
                 return;
             } catch (e) {
@@ -1205,7 +1216,7 @@ function boot() {
         switchView('viewSettings');
         log('Welcome! Add your TMDb key (and GitHub token) in Settings to get started.');
     }
-    log('FlixMine Cataloger ready.');
+    log('FlixMine Cataloger ready (build v3).');
     bootData();
 }
 
