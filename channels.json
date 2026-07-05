@@ -33,5 +33,12 @@
     "youtube_channel_id": "",
     "logo_url": "https://yt3.googleusercontent.com/MiPHwMenbgIuE2ZxWOaordQENHHSJpkLx7nz4NHJFFJT9A9uLuanBZeztgN6zjGplgUY4j571A=s160-c-k-c0x00ffffff-no-rj",
     "status": "approved"
+  },
+  {
+    "id": "filmfist",
+    "name": "FilmFist",
+    "youtube_channel_id": "UCSB9NWp2kV88x0kgzl3Nhtg",
+    "logo_url": "https://yt3.googleusercontent.com/rUUTgpp05YsBVdRtThNdFO2B_KwO0F2HiTz4qJmF2wzRdNf9-qyCz8zbjzCUGr-ShgH1jZuV=s160-c-k-c0x00ffffff-no-rj",
+    "status": "approved"
   }
 ]
