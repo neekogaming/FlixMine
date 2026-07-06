@@ -152,6 +152,9 @@ textarea { min-height: 120px; resize: vertical; }
 .yt-fields { flex: 1; }
 .yt-fields label { display: block; color: var(--t45); font-size: 12px; margin-bottom: 6px; }
 .yt-fields .hint { color: var(--t25); }
+.raw-title { margin-top: 6px; color: var(--t35); font-size: 12px; line-height: 1.4; }
+.raw-title .raw-label { color: var(--t25); }
+.raw-title a { margin-left: 8px; white-space: nowrap; }
 .yt-meta { display: flex; gap: 18px; margin-top: 8px; color: var(--t45); font-size: 12px; flex-wrap: wrap; }
 .yt-meta b { color: var(--t70); font-weight: 500; }
 

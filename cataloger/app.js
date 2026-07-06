@@ -110,6 +110,31 @@ function cleanTitle(title) {
         .replace(/^[\s\-|:]+|[\s\-|:]+$/g, '');
 }
 
+/* Channel uploads are almost always "Movie Title (1972) | FULL MOVIE | Actor | Actor".
+ * Survey of 151 catalog videos + channel feeds: 99% have separators, the movie name
+ * is the earliest non-promo segment, and a year marks the title segment. */
+const SEGMENT_SEP = /\s*(?:\||•|·|\/\/|—|–)\s*/;
+const JUNK_SEGMENT = /\b(full|free|complete)\b[^|]*\b(movie|film|feature|length)\b|\b(movie|film)s?\s*(hd|4k)?\s*$|^(hd|4k|1080p|720p)\b|\bofficial\b|\benglish\b|subtitles?|\bdubbed\b|remaster|^\s*(action|comedy|drama|thriller|horror|sci[- ]?fi|romance|western|crime|fantasy|adventure|family|mystery|documentary|kung\s*fu|martial\s*arts)(\s*[,&+]\s*[\w\s-]+)*\s*$/i;
+
+function pickTitleSegment(raw) {
+    raw = String(raw || '').trim();
+    const segments = raw.split(SEGMENT_SEP).map(s => s.trim()).filter(Boolean);
+    if (segments.length <= 1) return raw;
+    let best = segments[0], bestScore = -1;
+    segments.forEach((seg, i) => {
+        // judge junk with the year removed, so "Crime, Action (2018)" still
+        // reads as a genre list instead of stealing the year bonus
+        const sansYear = seg.replace(/\(?\b(19[2-9]\d|20\d{2})\b\)?/g, ' ').replace(/\s+/g, ' ').trim();
+        let score = 0;
+        if (sansYear && !JUNK_SEGMENT.test(sansYear)) score += 4;
+        if (/\b(19[2-9]\d|20\d{2})\b/.test(seg)) score += 3;
+        score += Math.max(0, 2 - i);
+        if (seg.replace(/[^a-z]/gi, '').length >= 3) score += 1;
+        if (score > bestScore) { bestScore = score; best = seg; }
+    });
+    return best;
+}
+
 function extractYearHint(title) {
     const now = new Date().getFullYear() + 1;
     const matches = (title || '').match(/\b(19[2-9]\d|20\d{2})\b/g) || [];
@@ -239,11 +264,17 @@ function titleVariants(cleaned) {
 }
 
 /* Full auto-match pipeline: returns scored candidates (best first). */
-async function autoMatch(ytTitle, { useOmdb = true, log: doLog = true } = {}) {
-    const cleaned = cleanTitle(ytTitle);
-    const yearHint = extractYearHint(ytTitle);
+async function autoMatch(ytTitle, { useOmdb = true, log: doLog = true, pick = true } = {}) {
+    const cleaned = cleanTitle(pick ? pickTitleSegment(ytTitle) : ytTitle);
+    const yearHint = extractYearHint(ytTitle); // full title — year can sit in any segment
     let results = [];
-    for (const variant of titleVariants(cleaned)) {
+    let variants = titleVariants(cleaned);
+    if (yearHint) {
+        // the year works better as a release-year filter than as query text
+        const noYear = cleaned.replace(/\s*\(?\b(19[2-9]\d|20\d{2})\b\)?/g, ' ').replace(/\s+/g, ' ').trim();
+        if (noYear) variants = [noYear, ...variants.filter(v => v !== noYear)];
+    }
+    for (const variant of variants) {
         if (doLog) log(`Searching TMDb for "${variant}"${yearHint ? ` (${yearHint})` : ''}…`);
         results = await tmdbSearch(variant, yearHint);
         if (!results.length && yearHint) results = await tmdbSearch(variant);
@@ -401,6 +432,8 @@ function resetWorkflow(clearLink = true) {
     $('manImdb').value = '';
     $('btnAppend').hidden = false;
     $('btnSkipDup').hidden = true;
+    $('rawTitleRow').hidden = true;
+    $('rawTitleText').textContent = '';
 }
 
 function setYtStatus(text, cls = '') {
@@ -437,7 +470,9 @@ async function handleLink(rawText) {
     state.ytTitleRaw = meta.title;
     state.ytChannelRaw = meta.channel;
     $('ytChannelRaw').textContent = meta.channel || '—';
-    $('ytTitle').value = cleanTitle(meta.title) || '';
+    $('ytTitle').value = cleanTitle(pickTitleSegment(meta.title)) || '';
+    $('rawTitleText').textContent = meta.title;
+    $('rawTitleRow').hidden = !meta.title;
 
     if (!meta.title) {
         setYtStatus('No title found — type it above and press Enter', 'err');
@@ -448,14 +483,14 @@ async function handleLink(rawText) {
     await runSearch(meta.title, seq);
 }
 
-async function runSearch(ytTitle, seq = ++state.lookupSeq) {
+async function runSearch(ytTitle, seq = ++state.lookupSeq, opts = {}) {
     setYtStatus('Matching on TMDb…', 'busy');
     $('matchCard').hidden = false;
     $('candList').innerHTML = '';
     $('matchStatus').textContent = 'searching…';
     $('verifyCard').hidden = true;
     try {
-        const scored = await autoMatch(ytTitle);
+        const scored = await autoMatch(ytTitle, opts);
         if (seq !== state.lookupSeq) return;
         state.candidates = scored;
         renderCandidates();
@@ -984,7 +1019,9 @@ async function reviewBatchItem(index) {
     $('ytOpenLink').href = item.link;
     $('ytVideoId').textContent = item.videoId;
     $('ytChannelRaw').textContent = item.channel || '—';
-    $('ytTitle').value = cleanTitle(item.ytTitle);
+    $('ytTitle').value = cleanTitle(pickTitleSegment(item.ytTitle));
+    $('rawTitleText').textContent = item.ytTitle || '';
+    $('rawTitleRow').hidden = !item.ytTitle;
 
     if (item.candidates?.length) {
         state.candidates = item.candidates;
@@ -1177,7 +1214,15 @@ function wire() {
         setTimeout(() => handleLink(text), 0);
     });
     $('ytTitle').addEventListener('keydown', e => {
-        if (e.key === 'Enter') runSearch($('ytTitle').value);
+        // user-typed text is taken literally — no segment picking
+        if (e.key === 'Enter') runSearch($('ytTitle').value, undefined, { pick: false });
+    });
+    $('useFullTitle').addEventListener('click', e => {
+        e.preventDefault();
+        const raw = state.ytTitleRaw || $('rawTitleText').textContent;
+        if (!raw) return;
+        $('ytTitle').value = cleanTitle(raw);
+        runSearch(raw, undefined, { pick: false });
     });
     $('btnLoadTmdb').addEventListener('click', async () => {
         const id = $('manTmdbId').value.trim();
@@ -1276,7 +1321,7 @@ function boot() {
         switchView('viewSettings');
         log('Welcome! Add your TMDb key (and GitHub token) in Settings to get started.');
     }
-    log('FlixMine Cataloger ready (build v9).');
+    log('FlixMine Cataloger ready (build v10).');
     bootData();
     // Resume matching for a restored queue (a reload interrupts the run)
     if (state.batch.some(i => i.status === 'queued') && state.settings.tmdb.trim()) {

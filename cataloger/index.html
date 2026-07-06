@@ -52,6 +52,10 @@
             <div class="yt-fields">
                 <label>Detected title <span class="hint">(edit + press Enter to re-search)</span></label>
                 <input type="text" id="ytTitle" autocomplete="off" spellcheck="false">
+                <div class="raw-title" id="rawTitleRow" hidden>
+                    <span class="raw-label">Full title:</span> <span id="rawTitleText"></span>
+                    <a href="#" id="useFullTitle">use full title ↩</a>
+                </div>
                 <div class="yt-meta">
                     <span>Channel: <b id="ytChannelRaw">—</b></span>
                     <span>Video ID: <code id="ytVideoId">—</code></span>
@@ -239,6 +243,6 @@
 </footer>
 
 <!-- bump ?v= on every app.js change so browsers can't serve a stale copy -->
-<script src="app.js?v=9"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>
